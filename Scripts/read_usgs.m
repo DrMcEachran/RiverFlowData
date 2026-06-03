@@ -4,7 +4,7 @@
 clear; clc;
 
 % --- User Inputs ---
-siteID = '05331000';        % Example: Mississippi River at St. Paul
+siteID = '04232053';        % Example: Mississippi River at St. Paul
 startDate = '2025-01-01';   % Format: YYYY-MM-DD
 endDate = '2025-12-31';     % Format: YYYY-MM-DD
 outputFile = 'Data/usgs_river_flow_test.csv';

@@ -1,24 +1,21 @@
 % =========================================================================
-% USGS River Flow Data Scraper
+% DNR Record Length Data Scraper
 % =========================================================================
 clear; clc;
-%test 1
+
 % --- User Inputs ---
-siteID = '05331000';        % Example: Mississippi River at St. Paul
-startDate = '2025-01-01';   % Format: YYYY-MM-DD
-endDate = '2025-12-31';     % Format: YYYY-MM-DD
-outputFile = 'Data/usgs_river_flow_test.csv';
-outputPng = fullfile('Data/', sprintf('usgs_%s_hydrograph.png', siteID)); 
+siteID = '22007001';        % Example: Mustinka River nr Wheaton, MN
+outputFile = 'Data/dnr_river_flow_test.csv';
 
 % --- Construct the USGS API URL ---
 % parameterCd=00060 specifies Discharge (Streamflow) in cubic feet per second (cfs)
 % dv means "daily value" for daily mean. We will want to move towards
 % instantaneous values, but for testing can explore daily values.
-baseURL = 'https://waterservices.usgs.gov/nwis/dv/';
-url = sprintf('%s?format=rdb&sites=%s&startDT=%s&endDT=%s&parameterCd=00060', ...
-    baseURL, siteID, startDate, endDate);
+baseURL = 'https://www.dnr.state.mn.us/waters/csg/site.html?id=';
+url = sprintf('%s%s', ...
+    baseURL, siteID);
 
-fprintf('Fetching data from USGS for site %s...\n', siteID);
+fprintf('Fetching data from DNR for site %s...\n', siteID);
 
 % --- Download and Clean Data ---
 tempFile = 'Data/temp_usgs_raw.txt';
@@ -27,7 +24,21 @@ cleanFile = 'Data/temp_usgs_clean.txt';
 try
     % Download raw RDB file from USGS
     websave(tempFile, url);
-    
+   % data=webread(url);
+   
+% % 2. Parse the text into an HTML DOM tree structure
+% tree = extractHTMLText(data);
+% 
+% % 3. Search for the specific container ID shown in your breadcrumbs
+% % Look for the div with ID 'site_stats'
+% statsDiv = findElement(tree, "div#site_stats");
+% 
+% % 4. Find all table rows within that specific container
+% tableRows = findElement(statsDiv, "tr");
+% 
+% % 5. Extract all text contained inside the target elements
+% cleanTextData = extractHTMLText(tableRows);
+% disp(cleanTextData);
     % Read raw text to clean up USGS-specific formatting quirks
     fileStr = fileread(tempFile);
     lines = splitlines(fileStr);

@@ -2,140 +2,79 @@
 % DNR Record Length Data Scraper
 % =========================================================================
 clear; clc;
-%test
+
 %1 - Import CooperativeStreamgaging_AllGages table.
 dataGages = readtable('CooperativeStreamgaging_AllGages.csv');
 
-for i=1:size(dataGages,1)
 %2 - Read station
+station = dataGages.station_id;
 
 %3 - Read organization
+organization = dataGages.organization;
 
-%4 -
+%4 - Make folder for all data
+rootFolder = 'C:\Users\natal\OneDrive\Área de Trabalho\UMN\GITHUB\Gage_Data';  
 
-end 
-% --- User Inputs ---
-siteID = '22007001';        % Example: Mustinka River nr Wheaton, MN
-outputFile = 'Data/dnr_river_flow_test.csv';
+% --> Create if statement for USGS stations
 
-% --- Construct the DNR API URL ---
-% parameterCd=00060 specifies Discharge (Streamflow) in cubic feet per second (cfs)
-% dv means "daily value" for daily mean. We will want to move towards
-% instantaneous values, but for testing can explore daily values.
-baseURL = 'https://www.dnr.state.mn.us/waters/csg/site.html?id=';
-url = sprintf('%s%s', ...
-    baseURL, siteID);
+%5 - Download raw data and save it to different folders
+for i = 1%:size(dataGages,1)
 
-fprintf('Fetching data from DNR for site %s...\n', siteID);
+    %5.1 - Get numeric station ID 
+    id = station(i,1);            
+    id = char(id);   % ensure it's char for regexp
+    stationID = regexp(id, '\d+', 'match', 'once'); % numeric station ID
+    stationStr = num2str(stationID); % string version for filenames/folders
+    %all_ids(i,:)=stationStr; %might need?
 
-% --- Download and Clean Data ---
-tempFile = 'Data/temp_usgs_raw.txt';
-cleanFile = 'Data/temp_usgs_clean.txt';
-
-try
-    % Download raw RDB file from USGS
-    websave(tempFile, url);
-
-    % Read raw text to clean up USGS-specific formatting quirks
-    fileStr = fileread(tempFile);
-    lines = splitlines(fileStr);
+    %5.2 - Find url for gage station    
+    baseURL = 'https://apps.dnr.state.mn.us/csg/api/v1/sites/';
+    url = sprintf('%s%s/download?all', baseURL, stationStr);
+    fprintf('Fetching data from DNR for site %s...\n', stationStr);
     
-    % Strip out USGS comment lines (starting with '#') and blank lines
-    validLines = lines(~startsWith(lines, '#') & ~cellfun(@isempty, lines));
-    
-    % USGS RDB format has a pesky "row format" line (e.g., '5s 15s 20d') 
-    % right below the column headers. We must delete it so MATLAB parses correctly.
-    if length(validLines) > 2
-        validLines(2) = []; 
-    else
-        error('No data found for the specified site or date range.');
+    %5.3 - Create a folder for this station
+    outFolder = fullfile(rootFolder, stationStr);
+    if ~exist(outFolder, 'dir')
+        mkdir(outFolder)
     end
     
-    % Write the cleaned data back to a temporary file
-    fid = fopen(cleanFile, 'w');
-    fprintf(fid, '%s\n', validLines{:});
-    fclose(fid);
+    %5.4 - Download zip file
+    zipFile = fullfile(rootFolder, ['csg_' stationStr '.zip']);
+    websave(zipFile, url);
     
-    % --- Load into MATLAB Table & Organize ---
-    dataTab = readtable(cleanFile, 'Delimiter', '\t', 'FileType', 'text');
+    %5.5 - Unzip file into the station-named folder
+    unzip(zipFile, outFolder);
     
-    % Standardize column names for readability
-    % The column containing the actual flow data typically contains '00060'
-    varNames = dataTab.Properties.VariableNames;
-    flowColIdx = contains(varNames, '00060') & ~contains(varNames, '_cd');
+    %5.6 - Delete the zip after extracting
+    delete(zipFile);
     
-    if any(flowColIdx)
-        dataTab.Properties.VariableNames{flowColIdx} = 'Discharge_CFS';
-    else
-        error('Discharge data column (00060) not found in the downloaded dataset.');
-    end
-    
-    if ismember('datetime', varNames)
-        dataTab.Properties.VariableNames{'datetime'} = 'Date';
-    end
-    
-    % Select and rearrange the core columns to keep
-    columnsToKeep = {'site_no', 'Date', 'Discharge_CFS'};
-    finalTab = dataTab(:, columnsToKeep);
-    
-    % Rename site column for aesthetic clarity
-    finalTab.Properties.VariableNames{'site_no'} = 'Site_ID';
-    
-    % --- Save to CSV ---
-    writetable(finalTab, outputFile);
-    fprintf('Success! Data saved to: %s\n', outputFile);
+    fprintf('Data downloaded and extracted for station ID %s\n', stationStr);
 
-% =====================================================================
-    % --- Plotting Functionality (HPC Friendly) ---
-    % =====================================================================
-    fprintf('Generating hydrograph...\n');
-    
-    % Set 'visible' to 'off' so it runs headlessly without a GUI display
-    fig = figure('Visible', 'off'); 
-    
-    % Plot the discharge data
-    plot(finalTab.Date, finalTab.Discharge_CFS, 'LineWidth', 1.5, 'Color', [0 0.4470 0.7410]);
-    
-    % Formatting the plot
-    grid on;
-    xlabel('Date', 'FontSize', 11, 'FontWeight', 'bold');
-    ylabel('Daily Mean Discharge (cfs)', 'FontSize', 11, 'FontWeight', 'bold');
-    title(sprintf('USGS Hydrograph - Site %s', siteID), 'FontSize', 13, 'FontWeight', 'bold');
-    
-    % Optimize axis padding
-    xlim([min(finalTab.Date) max(finalTab.Date)]);
-    
-    % Save the figure to your outputs folder at 300 DPI resolution
-    exportgraphics(fig, outputPng, 'Resolution', 300);
-    fprintf('Hydrograph plot saved to: %s\n', outputPng);
-    
-    % Close the hidden figure to free up system memory
-    close(fig);
+%6 - Read tables and find dates
 
-catch ME
-    warning('An error occurred during execution: %s', ME.message);
+    %6.1 - Enter station-named folder
+    
+    %6.2 - Find discharge document
+    table=readtable("csg_20058001_262_discharge.csv");
+
+    %6.3 - Find discharge dates and record length
+    disc_start_tstamp=table(end,2);
+    %disc_start_date=num2str(disc_start_tstamp(1:10)); %error
+    disc_start_dates(i,1)=disc_start_date;
+    disc_end_tstamp=table(2,2);
+    %disc_end_date=disc_end_tstamp(1:10); %error
+    disc_end_dates(i,1)=disc_end_date;
+
+% --> Get first and last date from discharge and raw level data sets
+% --> Get time interval
+% --> Clean discharge and raw levels data
+
+fprintf('Dates and record length saved for station ID %s\n', stationStr);
+
 end
+%end
 
-% --- Cleanup Temporary Files ---
-if exist(tempFile, 'file'), delete(tempFile); end
-if exist(cleanFile, 'file'), delete(cleanFile); end
+% 7 - Add all dates to Gage metadata
+dataGages.start_dates=start_dates;
+dataGages.start_dates=end_dates;
 
-% https://apps.dnr.state.mn.us/csg/api/v1/sites/32062001/download?all
-
-% Import metadata
-% % 
-% % for every gage id: 
-% % 
-% % IF USGS ... do usgs calls. 
-% % IF NOT USGS as primary entity ... Do State of MN stuff{
-% % 
-% % download data
-% % unzip file
-% % read in discharge ... find beginning and end date
-% % clean up the date, make it a date, flow, quality csv
-% % save the discharge as SITE_discharge.csv
-% % read in raw levels and do the same
-% % 
-% % save the start and end dates, end-start as well, for discharge and raw levels into a different record_length_metadata csv that populates all gages as you go thru the loop 
-% % 
-% % }
